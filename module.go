@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"go.viam.com/rdk/components/arm"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 	generic "go.viam.com/rdk/services/generic"
@@ -12,7 +13,6 @@ import (
 
 var (
 	RepeatArmMovements = resource.NewModel("brad-grigsby", "arm-controls", "repeat-arm-movements")
-	errUnimplemented   = errors.New("unimplemented")
 )
 
 func init() {
@@ -24,33 +24,29 @@ func init() {
 }
 
 type Config struct {
-	/*
-		Put config attributes here. There should be public/exported fields
-		with a `json` parameter at the end of each attribute.
-
-		Example config struct:
-			type Config struct {
-				Pin   string `json:"pin"`
-				Board string `json:"board"`
-				MinDeg *float64 `json:"min_angle_deg,omitempty"`
-			}
-
-		If your model does not need a config, replace *Config in the init
-		function with resource.NoNativeConfig
-	*/
+	Arm            string      `json:"arm"`
+	JointPositions [][]float64 `json:"joint_positions"`
+	NumRepeats     int         `json:"num_repeats"`
 }
 
-// Validate ensures all parts of the config are valid and important fields exist.
-// Returns implicit required (first return) and optional (second return) dependencies based on the config.
-// The path is the JSON path in your robot's config (not the `Config` struct) to the
-// resource being validated; e.g. "components.0".
 func (cfg *Config) Validate(path string) ([]string, []string, error) {
-	// Add config validation code here
+	if cfg.Arm == "" {
+		return nil, nil, errors.New("arm must be specified and cannot be empty")
+	}
+	if len(cfg.JointPositions) == 0 {
+		return nil, nil, errors.New("joint_positions must be specified and cannot be empty")
+	}
+	if cfg.NumRepeats <= 0 {
+		return nil, nil, errors.New("num_repeats must be greater than zero")
+	}
+
 	return nil, nil, nil
 }
 
 type armControlsRepeatArmMovements struct {
 	resource.AlwaysRebuild
+
+	arm arm.Arm
 
 	name resource.Name
 
@@ -72,10 +68,15 @@ func newArmControlsRepeatArmMovements(ctx context.Context, deps resource.Depende
 }
 
 func NewRepeatArmMovements(ctx context.Context, deps resource.Dependencies, name resource.Name, conf *Config, logger logging.Logger) (resource.Resource, error) {
+	arm, err := arm.FromProvider(deps, conf.Arm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get arm %q from provider: %w", conf.Arm, err)
+	}
 
 	cancelCtx, cancelFunc := context.WithCancel(context.Background())
 
 	s := &armControlsRepeatArmMovements{
+		arm:        arm,
 		name:       name,
 		logger:     logger,
 		cfg:        conf,
@@ -90,6 +91,38 @@ func (s *armControlsRepeatArmMovements) Name() resource.Name {
 }
 
 func (s *armControlsRepeatArmMovements) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
+	commandType, ok := cmd["command"].(string)
+	if !ok {
+		return nil, fmt.Errorf("command must have a 'command' key of type string")
+	}
+
+	switch commandType {
+	case "execute":
+		for i := 0; i < s.cfg.NumRepeats; i++ {
+			s.logger.Infof("Running iteration %v\n", i)
+			for _, jp := range s.cfg.JointPositions {
+				err := s.arm.MoveToJointPositions(s.cancelCtx, jp, nil)
+				if err != nil {
+					return nil, fmt.Errorf("failed to move arm to joint positions on iteration %v: %w", i, err)
+				}
+			}
+		}
+	case "move_to_index":
+		index, ok := cmd["index"].(int)
+		if !ok {
+			return nil, fmt.Errorf("move_to_index command requires an 'index' key of type int")
+		}
+		if index < 0 || index >= len(s.cfg.JointPositions) {
+			return nil, fmt.Errorf("index %d out of range", index)
+		}
+		jp := s.cfg.JointPositions[index]
+		err := s.arm.MoveToJointPositions(s.cancelCtx, jp, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to move arm to joint positions at index %d: %w", index, err)
+		}
+	default:
+		return nil, fmt.Errorf("unknown command: %s", commandType)
+	}
 	return nil, fmt.Errorf("not implemented")
 }
 
