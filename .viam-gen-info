@@ -1,0 +1,13 @@
+{
+  "module_name": "arm-controls",
+  "namespace": "brad-grigsby",
+  "language": "go",
+  "resource_type": "service",
+  "resource_subtype": "generic",
+  "model_name": "repeat-arm-movements",
+  "enable_cloud_build": true,
+  "initialize_git": false,
+  "generator_version": "0.1.0",
+  "generated_on": "2025-11-05T21:28:40.816548Z",
+  "module_readme_link": "README.md"
+}
