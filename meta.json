@@ -8,7 +8,7 @@
     {
       "api": "rdk:service:generic",
       "model": "brad-grigsby:arm-controls:repeat-arm-movements",
-      "short_description": "Provide a short (100 characters or less) description of this model here",
+      "short_description": "A generic service that controls an arm to repeat a sequence of joint positions for a specified number of iterations. This service is useful for automated testing, demonstrations, or repetitive tasks.",
       "markdown_link": "README.md#model-brad-grigsbyarm-controlsrepeat-arm-movements"
     }
   ],
