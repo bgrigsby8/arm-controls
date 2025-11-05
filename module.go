@@ -107,6 +107,7 @@ func (s *armControlsRepeatArmMovements) DoCommand(ctx context.Context, cmd map[s
 				}
 			}
 		}
+		return map[string]any{"executed_repeats": s.cfg.NumRepeats}, nil
 	case "move_to_index":
 		index, ok := cmd["index"].(int)
 		if !ok {
@@ -120,10 +121,15 @@ func (s *armControlsRepeatArmMovements) DoCommand(ctx context.Context, cmd map[s
 		if err != nil {
 			return nil, fmt.Errorf("failed to move arm to joint positions at index %d: %w", index, err)
 		}
+		return map[string]any{"moved_to_index": index}, nil
+	case "cancel":
+		s.cancelFunc()
+		s.cancelCtx, s.cancelFunc = context.WithCancel(context.Background())
+		s.logger.Info("Cancelled current arm movement")
+		return map[string]any{"cancelled": true}, nil
 	default:
 		return nil, fmt.Errorf("unknown command: %s", commandType)
 	}
-	return nil, fmt.Errorf("not implemented")
 }
 
 func (s *armControlsRepeatArmMovements) Close(context.Context) error {
